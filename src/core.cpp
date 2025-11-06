@@ -14,19 +14,32 @@
 #include "v4/task.h"
 #include "v4/vm_api.h"
 
-// V4-std integration (optional - only if V4_USE_V4STD is defined)
-#ifdef V4_USE_V4STD
-#include "v4std/sys_handlers.hpp"
-#endif
-
 /* ========================================================================= */
-/* UART Handle Management                                                    */
+/* SYS Handler Registration                                                  */
 /* ========================================================================= */
 
-// Static storage for UART handles (indexed by port number)
-// Maximum 4 UART ports (typical for most platforms)
-#define MAX_UART_PORTS 4
-static hal_handle_t uart_handles[MAX_UART_PORTS] = {nullptr, nullptr, nullptr, nullptr};
+// Global SYS handler function pointer
+static v4_sys_handler_fn g_sys_handler = nullptr;
+
+extern "C" void v4_register_sys_handler(v4_sys_handler_fn handler)
+{
+  g_sys_handler = handler;
+}
+
+// Internal function to invoke registered SYS handler
+static int32_t v4_invoke_sys_handler(Vm* vm, int32_t sys_id, int32_t arg0, int32_t arg1,
+                                     int32_t arg2)
+{
+  if (g_sys_handler)
+  {
+    return g_sys_handler(vm, sys_id, arg0, arg1, arg2);
+  }
+  else
+  {
+    // No handler registered - return error
+    return -1;  // HAL_ERR_NOTSUP or similar
+  }
+}
 
 extern "C" int v4_vm_version(void)
 {
@@ -939,23 +952,13 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
 
       case v4::Op::SYS:
       {
-        // Pop 16-bit SYS ID from stack (Forth-style: n SYS)
-        v4_i32 sys_id_i32;
+        // Stack layout: ( arg0 arg1 arg2 sys_id -- result )
+        // sys_id is now 32-bit (no longer limited to 8-bit or 16-bit)
+        v4_i32 sys_id, arg2, arg1, arg0;
         v4_err err;
-        if ((err = ds_pop(vm, &sys_id_i32)))
+
+        if ((err = ds_pop(vm, &sys_id)))
           return err;
-
-        // Validate SYS ID range (0-65535)
-        if (sys_id_i32 < 0 || sys_id_i32 > 0xFFFF)
-          return vm_panic(vm, V4_ERR(InvalidArg));
-
-        uint16_t sys_id = static_cast<uint16_t>(sys_id_i32);
-
-#ifdef V4_USE_V4STD
-        // V4-std path: Use dynamic handler registry
-        // Stack layout: ( arg0 arg1 arg2 -- result )
-        v4_i32 arg2, arg1, arg0;
-
         if ((err = ds_pop(vm, &arg2)))
           return err;
         if ((err = ds_pop(vm, &arg1)))
@@ -963,265 +966,13 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
         if ((err = ds_pop(vm, &arg0)))
           return err;
 
-        // Invoke V4-std handler
-        int32_t result = v4std::invoke_sys_handler(sys_id, arg0, arg1, arg2);
+        // Invoke registered SYS handler
+        int32_t result = v4_invoke_sys_handler(vm, sys_id, arg0, arg1, arg2);
 
         if ((err = ds_push(vm, result)))
           return err;
         break;
-#else
-        // V4-hal path: Use legacy 8-bit syscalls (backward compatibility)
-        // NOTE: Only supports sys_id 0-255 (legacy range)
-        if (sys_id > 0xFF)
-          return vm_panic(vm, V4_ERR(UnknownOp));
-
-        uint8_t sys_id_u8 = static_cast<uint8_t>(sys_id);
-
-        switch (sys_id_u8)
-        {
-          /* GPIO operations */
-          case V4_SYS_GPIO_INIT:  // (pin mode -- err)
-          {
-            v4_i32 mode, pin;
-            if ((err = ds_pop(vm, &mode)))
-              return err;
-            if ((err = ds_pop(vm, &pin)))
-              return err;
-
-            int hal_err = hal_gpio_mode(pin, static_cast<hal_gpio_mode_t>(mode));
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_GPIO_WRITE:  // (pin value -- err)
-          {
-            v4_i32 value, pin;
-            if ((err = ds_pop(vm, &value)))
-              return err;
-            if ((err = ds_pop(vm, &pin)))
-              return err;
-
-            int hal_err = hal_gpio_write(pin, static_cast<hal_gpio_value_t>(value));
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_GPIO_READ:  // (pin -- value err)
-          {
-            v4_i32 pin;
-            if ((err = ds_pop(vm, &pin)))
-              return err;
-
-            hal_gpio_value_t value;
-            int hal_err = hal_gpio_read(pin, &value);
-            if ((err = ds_push(vm, static_cast<v4_i32>(value))))
-              return err;
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          /* UART operations */
-          case V4_SYS_UART_INIT:  // (port baudrate -- err)
-          {
-            v4_i32 baudrate, port;
-            if ((err = ds_pop(vm, &baudrate)))
-              return err;
-            if ((err = ds_pop(vm, &port)))
-              return err;
-
-            // Validate port number
-            if (port < 0 || port >= MAX_UART_PORTS)
-            {
-              if ((err = ds_push(vm, HAL_ERR_PARAM)))
-                return err;
-              break;
-            }
-
-            // Close existing handle if port already open
-            if (uart_handles[port] != nullptr)
-            {
-              hal_uart_close(uart_handles[port]);
-              uart_handles[port] = nullptr;
-            }
-
-            // Create UART config with default settings (C++17 compatible)
-            hal_uart_config_t config = {
-                baudrate,  // baudrate
-                8,         // data_bits (standard)
-                1,         // stop_bits (standard)
-                0          // parity (no parity)
-            };
-
-            // Open UART and store handle
-            uart_handles[port] = hal_uart_open(port, &config);
-            int hal_err = (uart_handles[port] != nullptr) ? HAL_OK : HAL_ERR_IO;
-
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_UART_PUTC:  // (port char -- err)
-          {
-            v4_i32 ch, port;
-            if ((err = ds_pop(vm, &ch)))
-              return err;
-            if ((err = ds_pop(vm, &port)))
-              return err;
-
-            // Validate port number and check if UART is open
-            if (port < 0 || port >= MAX_UART_PORTS || uart_handles[port] == nullptr)
-            {
-              if ((err = ds_push(vm, HAL_ERR_NODEV)))
-                return err;
-              break;
-            }
-
-            // Write single character to UART
-            uint8_t byte = static_cast<uint8_t>(ch);
-            int result = hal_uart_write(uart_handles[port], &byte, 1);
-            int hal_err = (result == 1) ? HAL_OK : ((result < 0) ? result : HAL_ERR_IO);
-
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_UART_GETC:  // (port -- char err)
-          {
-            v4_i32 port;
-            if ((err = ds_pop(vm, &port)))
-              return err;
-
-            // Validate port number and check if UART is open
-            if (port < 0 || port >= MAX_UART_PORTS || uart_handles[port] == nullptr)
-            {
-              if ((err = ds_push(vm, 0)))  // Push dummy char value
-                return err;
-              if ((err = ds_push(vm, HAL_ERR_NODEV)))
-                return err;
-              break;
-            }
-
-            // Read single character from UART (non-blocking)
-            uint8_t byte = 0;
-            int result = hal_uart_read(uart_handles[port], &byte, 1);
-            int hal_err = (result >= 0) ? HAL_OK : result;
-
-            if ((err = ds_push(vm, static_cast<v4_i32>(byte))))
-              return err;
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          /* Timer operations */
-          case V4_SYS_MILLIS:  // ( -- ms)
-          {
-            uint32_t ms = hal_millis();
-            if ((err = ds_push(vm, static_cast<v4_i32>(ms))))
-              return err;
-            break;
-          }
-
-          case V4_SYS_MICROS:  // ( -- us_lo us_hi)
-          {
-            uint64_t us = hal_micros();
-            uint32_t us_lo = static_cast<uint32_t>(us & 0xFFFFFFFF);
-            uint32_t us_hi = static_cast<uint32_t>(us >> 32);
-            if ((err = ds_push(vm, static_cast<v4_i32>(us_lo))))
-              return err;
-            if ((err = ds_push(vm, static_cast<v4_i32>(us_hi))))
-              return err;
-            break;
-          }
-
-          case V4_SYS_DELAY_MS:  // (ms -- )
-          {
-            v4_i32 ms;
-            if ((err = ds_pop(vm, &ms)))
-              return err;
-
-            hal_delay_ms(static_cast<uint32_t>(ms));
-            break;
-          }
-
-          case V4_SYS_DELAY_US:  // (us -- )
-          {
-            v4_i32 us;
-            if ((err = ds_pop(vm, &us)))
-              return err;
-
-            hal_delay_us(static_cast<uint32_t>(us));
-            break;
-          }
-
-          /* Console I/O operations */
-          case V4_SYS_EMIT:  // (c -- )
-          {
-            v4_i32 c;
-            if ((err = ds_pop(vm, &c)))
-              return err;
-
-            // Write single character to console
-            uint8_t byte = static_cast<uint8_t>(c);
-            int result = hal_console_write(&byte, 1);
-            int hal_err = (result == 1) ? HAL_OK : ((result < 0) ? result : HAL_ERR_IO);
-
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_KEY:  // ( -- c)
-          {
-            // Read single character from console (blocking)
-            uint8_t byte = 0;
-            int result = hal_console_read(&byte, 1);
-            int hal_err = (result >= 0) ? HAL_OK : result;
-
-            if ((err = ds_push(vm, static_cast<v4_i32>(byte))))
-              return err;
-            if ((err = ds_push(vm, hal_err)))
-              return err;
-            break;
-          }
-
-          /* System operations */
-          case V4_SYS_SYSTEM_RESET:  // ( -- )
-          {
-            // NOTE: System reset not yet available in new HAL API
-            // TODO: Add system reset support to V4-hal library
-            // For now, return "not supported" error
-            if ((err = ds_push(vm, HAL_ERR_NOTSUP)))
-              return err;
-            break;
-          }
-
-          case V4_SYS_SYSTEM_INFO:  // ( -- addr len)
-          {
-            // NOTE: System info not yet available in new HAL API
-            // TODO: Add system info support to V4-hal library
-            // For now, return empty string and "not supported" error
-            if ((err = ds_push(vm, 0)))  // addr = NULL
-              return err;
-            if ((err = ds_push(vm, 0)))  // len = 0
-              return err;
-            if ((err = ds_push(vm, HAL_ERR_NOTSUP)))
-              return err;
-            break;
-          }
-
-          default:
-            return vm_panic(vm, V4_ERR(UnknownOp));
-        }
-        break;
-#endif  // V4_USE_V4STD
       }
-
       case v4::Op::RET:
         return V4_ERR(OK);
 

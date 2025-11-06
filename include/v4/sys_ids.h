@@ -5,6 +5,11 @@
  * @brief SYS instruction ID definitions
  *
  * Defines the ID constants for SYS instruction opcodes.
+ *
+ * The SYS instruction now supports 32-bit system call IDs (0x00000000 - 0xFFFFFFFF).
+ * Legacy 8-bit IDs (0x00-0xFF) are defined below for backward compatibility,
+ * but new code should use 32-bit IDs (e.g., 0x0100-0x01FF for LED operations).
+ *
  * See docs/sys-opcodes.md for detailed documentation.
  */
 

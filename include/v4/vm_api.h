@@ -425,6 +425,35 @@ extern "C"
   v4_err vm_panic(struct Vm *vm, v4_err error_code);
 
   /* ------------------------------------------------------------------------- */
+  /* SYS instruction handler                                                   */
+  /* ------------------------------------------------------------------------- */
+
+  /**
+   * @brief SYS handler function type
+   *
+   * Stack layout: ( arg0 arg1 arg2 sys_id -- result )
+   *
+   * @param vm     VM instance
+   * @param sys_id 32-bit system call ID
+   * @param arg0   First argument
+   * @param arg1   Second argument
+   * @param arg2   Third argument
+   * @return Result value to push on stack (typically 0 for success, negative for error)
+   */
+  typedef v4_i32 (*v4_sys_handler_fn)(struct Vm *vm, v4_i32 sys_id, v4_i32 arg0, v4_i32 arg1,
+                                      v4_i32 arg2);
+
+  /**
+   * @brief Register global SYS handler
+   *
+   * The registered handler will be invoked for all SYS instructions.
+   * If no handler is registered, SYS instructions return -1 (not supported).
+   *
+   * @param handler Function pointer to SYS handler (or NULL to unregister)
+   */
+  void v4_register_sys_handler(v4_sys_handler_fn handler);
+
+  /* ------------------------------------------------------------------------- */
   /* Error handling notes                                                      */
   /* ------------------------------------------------------------------------- */
   /**
