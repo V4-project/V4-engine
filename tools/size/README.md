@@ -37,6 +37,12 @@ benchmark or a validation of task scheduling. The mock platform and host libc af
 the result; these numbers are **not ESP32 firmware sizes**. Do not compare different
 profiles against each other as if they were code-change deltas.
 
+Standard panic diagnostics are enabled by default. With engine 0.17.0+, use
+`build --panic-diagnostics off --output build-size-no-panic-output` to measure
+an opt-in build without the standard panic formatter. Reports record this setting
+and reject comparisons between on/off configurations. Compare matching settings
+for refactoring deltas; an on/off comparison represents a feature tradeoff instead.
+
 Each profile retains `v4_size_probe`, `probe.map`, and a JSON report with source revision,
 dirty status, ELF architecture, compiler/linker/size/CMake versions, CMake flags and a
 harness hash. Comparisons reject differing configurations. Rebuild both revisions when

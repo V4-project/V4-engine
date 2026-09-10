@@ -55,6 +55,29 @@ class SizeReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare(self.report(), after)
 
+    def test_panic_configuration_mismatch(self):
+        before, after = self.report(), self.report()
+        before["configuration"]["panic_diagnostics"] = "on"
+        after["configuration"]["panic_diagnostics"] = "off"
+        with self.assertRaises(ValueError):
+            compare(before, after)
+
+    def test_old_engine_cannot_claim_diagnostics_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CMakeLists.txt").write_text("# old engine")
+            output = root / "output"
+
+            def configure(*args, **kwargs):
+                flags = output / "plain/engine/CMakeFiles/v4engine.dir/flags.make"
+                flags.parent.mkdir(parents=True)
+                flags.write_text("CXX_DEFINES =\n")
+
+            with patch("size_report.subprocess.run", side_effect=configure) as mocked:
+                self.assertEqual(main(["build", "--source", str(root), "--output", str(output),
+                                       "--panic-diagnostics", "off"]), 2)
+                self.assertEqual(mocked.call_count, 1)
+
     def test_elf_only(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input"

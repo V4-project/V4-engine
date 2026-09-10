@@ -12,6 +12,7 @@ extern "C"
    *
    * Structure holding diagnostic information when VM enters an error state.
    * Collected by vm_panic() function and used for diagnostic output.
+   * Unavailable stack values are zero. PC is currently a zero placeholder.
    */
   typedef struct V4PanicInfo
   {
@@ -43,6 +44,9 @@ extern "C"
    *
    * Registers a callback to be invoked when vm_panic() is called.
    * This allows embedders to implement custom error handling/logging.
+   * Standard diagnostics are printed before the callback unless the engine was
+   * built with V4_PANIC_DIAGNOSTICS=0 (CMake: -DV4_PANIC_DIAGNOSTICS=OFF).
+   * Disabling diagnostics does not disable this callback or error returns.
    *
    * @param vm         VM instance
    * @param handler    Panic handler callback (NULL to disable)

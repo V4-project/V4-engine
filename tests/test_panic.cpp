@@ -181,3 +181,34 @@ TEST_CASE("Custom panic handler: NULL handler")
   CHECK(err == static_cast<v4_err>(Err::InvalidArg));
   CHECK(g_panic_called == false);  // Handler was cleared
 }
+
+TEST_CASE("Custom panic handler: Deterministic snapshot without stack mutation")
+{
+  for (int depth = 0; depth <= 6; ++depth)
+  {
+    Vm vm{};
+    vm_reset(&vm);
+    vm_set_panic_handler(&vm, test_panic_handler, nullptr);
+    for (int i = 0; i < depth; ++i)
+      REQUIRE(vm_ds_push(&vm, 10 + i) == 0);
+    *vm.rp++ = 123;
+
+    g_panic_called = false;
+    REQUIRE(vm_panic(&vm, static_cast<v4_err>(Err::InvalidArg)) ==
+            static_cast<v4_err>(Err::InvalidArg));
+    CHECK(g_panic_called);
+    CHECK(g_panic_info.pc == 0);
+    CHECK(g_panic_info.ds_depth == depth);
+    CHECK(g_panic_info.rs_depth == 1);
+    CHECK(vm.rp == vm.RS + 1);
+    CHECK(vm.RS[0] == 123);
+    CHECK(g_panic_info.has_stack_data == (depth > 0));
+    CHECK(g_panic_info.tos == (depth > 0 ? 9 + depth : 0));
+    CHECK(g_panic_info.nos == (depth > 1 ? 8 + depth : 0));
+    for (int i = 0; i < 4; ++i)
+      CHECK(g_panic_info.stack[i] == (i < depth ? 9 + depth - i : 0));
+    CHECK(vm_ds_depth_public(&vm) == depth);
+    for (int i = 0; i < depth; ++i)
+      CHECK(vm_ds_peek_public(&vm, i) == 9 + depth - i);
+  }
+}

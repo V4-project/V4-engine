@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(
   V4Engine
-  VERSION 0.16.0
+  VERSION 0.17.0
   LANGUAGES C CXX)
 
 # ============================================================================
@@ -19,6 +19,7 @@ option(V4_ENABLE_MOCK_HAL "Build with mock HAL (required for tests)" ON)
 option(V4_USE_V4HAL "Use V4-hal C++17 CRTP implementation" OFF)
 option(V4_USE_V4STD "Use V4-std device-independent standard library" OFF)
 option(V4_OPTIMIZE_SIZE "Optimize for size (-Os)" ON)
+option(V4_PANIC_DIAGNOSTICS "Include standard panic diagnostic output" ON)
 option(
   V4_ENABLE_LTO
   "Enable Link Time Optimization (incompatible with sanitizers - disable for ASan/TSan)"
@@ -82,6 +83,8 @@ else()
 endif()
 
 add_library(v4engine STATIC ${V4ENGINE_SOURCES})
+target_compile_definitions(v4engine
+                           PRIVATE V4_PANIC_DIAGNOSTICS=$<BOOL:${V4_PANIC_DIAGNOSTICS}>)
 
 target_include_directories(
   v4engine
@@ -260,6 +263,14 @@ if(V4_BUILD_TESTS)
 
     # Panic Handler Tests
     add_v4_test(test_panic tests/test_panic.cpp)
+    add_executable(panic_output_probe tests/panic_output_probe.cpp)
+    target_link_libraries(panic_output_probe PRIVATE v4engine mock_hal)
+    add_test(
+      NAME test_panic_output
+      COMMAND
+        ${CMAKE_COMMAND} -DPROBE=$<TARGET_FILE:panic_output_probe>
+        -DDIAGNOSTICS=${V4_PANIC_DIAGNOSTICS} -P
+        ${PROJECT_SOURCE_DIR}/tests/check_panic_output.cmake)
 
     # C API Tests
     add_executable(test_vm_c tests/test_vm_c.c)

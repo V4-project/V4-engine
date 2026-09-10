@@ -90,7 +90,12 @@ def build(args):
         subprocess.run(["cmake", "-S", str(HERE), "-B", str(directory),
                         "-G", "Unix Makefiles", f"-DV4_SOURCE_DIR={source}",
                         f"-DSIZE_LTO={'ON' if lto else 'OFF'}",
-                        f"-DSIZE_GC={'ON' if gc else 'OFF'}"], check=True)
+                        f"-DSIZE_GC={'ON' if gc else 'OFF'}",
+                        f"-DV4_PANIC_DIAGNOSTICS={args.panic_diagnostics.upper()}"], check=True)
+        if args.panic_diagnostics == "off":
+            flags_file = directory / "engine/CMakeFiles/v4engine.dir/flags.make"
+            if "-DV4_PANIC_DIAGNOSTICS=0" not in flags_file.read_text().split():
+                raise ValueError("Engine does not support disabling panic diagnostics")
         subprocess.run(["cmake", "--build", str(directory), "--target", "v4_size_probe",
                         "--parallel", str(args.jobs)], check=True)
         elf = directory / "v4_size_probe"
@@ -108,7 +113,8 @@ def build(args):
                   "target": run([compiler, "-dumpmachine"]),
                   "linker": tool_version(cache["CMAKE_LINKER"]),
                   "cmake": tool_version("cmake"), "harness": harness_hash,
-                  "flags": flags, "backend": "CUSTOM", "optimization": "Os"}
+                  "flags": flags, "backend": "CUSTOM", "optimization": "Os",
+                  "panic_diagnostics": args.panic_diagnostics}
         report = measure(elf, args.size_tool, config)
         report["source_revision"] = run(["git", "-C", source, "rev-parse", "HEAD"])
         report["source_dirty"] = bool(run(["git", "-C", source, "status", "--porcelain"]))
@@ -124,6 +130,8 @@ def main(argv=None):
     builder.add_argument("--output", type=Path, required=True)
     builder.add_argument("--jobs", type=int, default=2)
     builder.add_argument("--size-tool", default="size")
+    builder.add_argument("--panic-diagnostics", choices=("on", "off"), default="on",
+                         help="Standard panic output (off requires engine 0.17.0+)")
     recorder = commands.add_parser("measure", help="Record an existing host or firmware ELF")
     recorder.add_argument("elf", type=Path)
     recorder.add_argument("--output", type=Path, required=True)

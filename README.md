@@ -123,6 +123,14 @@ See [v4/task.h](include/v4/task.h) for full API documentation.
 
 ## Panic Handler
 
+Standard diagnostics are enabled by default and precede any custom callback.
+For size-sensitive embedders with their own logging, configure
+`-DV4_PANIC_DIAGNOSTICS=OFF` to remove the standard formatter and its strings.
+Callbacks, stack snapshots and error returns remain enabled. Without a callback,
+this configuration returns the error silently. Direct-source builds must define
+`V4_PANIC_DIAGNOSTICS=0` when compiling `src/panic.cpp`; defining it only in the
+application does not change an already-built engine. The public ABI is unchanged.
+
 V4 includes a comprehensive panic handler for debugging errors in production:
 
 ### Features

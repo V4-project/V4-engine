@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-10
+
+### Added
+- Opt-in removal of standard panic printing with `V4_PANIC_DIAGNOSTICS=OFF`, preserving callbacks, snapshots and error returns. Diagnostics remain enabled by default, including direct-source builds.
+- Output/callback-order checks and a diagnostics-disabled CI build; size reports record the panic diagnostics setting.
+
+### Changed
+- Separate panic formatting from snapshot collection within the existing source file, preserving downstream direct-source build lists.
+- Read each of the top four data-stack values once; initialize unavailable snapshot fields to zero.
+
 ## [0.16.0] - 2026-09-10
 
 ### Added
