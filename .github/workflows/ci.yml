@@ -117,7 +117,7 @@ jobs:
 
     - name: Check C/C++ formatting
       run: |
-        find src include tests -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
+        find src include tests tools -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
         -not -path "*/vendor/*" | \
         xargs clang-format --dry-run --Werror || \
         (echo "❌ C/C++ formatting check failed. Run 'clang-format -i src/**/*.{cpp,hpp,h} include/**/*.{h,hpp}' to fix." && exit 1)
@@ -127,8 +127,8 @@ jobs:
 
     - name: Check CMake formatting
       run: |
-        find . -name 'CMakeLists.txt' -o -name '*.cmake' | \
-        xargs cmake-format --check || \
+        git ls-files -z --cached --others --exclude-standard -- ':(glob)**/CMakeLists.txt' ':(glob)**/*.cmake' | \
+        xargs -0 cmake-format --check || \
         (echo "❌ CMake formatting check failed. Run 'cmake-format -i CMakeLists.txt' to fix." && exit 1)
 
   build-options:

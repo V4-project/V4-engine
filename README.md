@@ -39,6 +39,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 
+### Binary size comparisons
+
+`make size SIZE_OUTPUT=build-size-before` measures a minimal linked VM executable in
+three fixed GC/LTO configurations. JSON reports can be compared locally or against the
+base revision in the Binary Size CI workflow. Existing firmware ELF files can also be
+recorded and compared; host measurements are not firmware flash sizes.
+See [measurement commands, constraints and optional budgets](tools/size/README.md).
+
 ### Building with V4-hal (C++17 CRTP HAL)
 
 V4 can optionally use the [V4-hal](https://github.com/kirisaki/V4-hal) C++17 CRTP implementation for zero-cost hardware abstraction:

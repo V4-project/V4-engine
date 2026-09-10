@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-10
+
+### Added
+- Reference Linux/GCC size probe with three fixed profiles: -Os, -Os with section GC, and -Os with LTO and section GC. VM behavior is unchanged.
+- JSON reports and Markdown comparisons for reference executables and existing firmware ELF files, with configuration mismatch checks and an optional text+data growth budget.
+- Binary Size CI compares base and current revisions using the same harness/toolchain, retains ELF files and link maps, and reports changes without enforcing a growth budget yet.
+- Reporting-tool regression tests and documented host/ESP32-C6 measurement procedures.
+
+### Changed
+- Advance beyond the existing v0.15.0 tag instead of reusing the stale 0.14.0 CMake version.
+- Replace the Makefile's archive/doctest size measurement with the reference probe.
+- Exclude ignored build artifacts from CMake formatting checks, and include the new probe in C++ formatting checks.
+
 ## [0.13.0] - 2025-11-05
 
 ### Added

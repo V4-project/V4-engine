@@ -1,0 +1,67 @@
+name: Binary Size
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Baseline ref to compare with this revision
+        required: true
+        default: v0.15.0
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc-13
+      CXX: g++-13
+      BASE_REF: ${{ github.event.pull_request.base.sha || inputs.baseline || github.event.before }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: current
+
+      - uses: actions/checkout@v6
+        if: env.BASE_REF != '' && env.BASE_REF != '0000000000000000000000000000000000000000'
+        with:
+          ref: ${{ env.BASE_REF }}
+          path: baseline
+
+      - name: Test reporting tool
+        run: python3 -m unittest discover -s current/tools/size -v
+
+      - name: Measure current revision
+        run: python3 current/tools/size/size_report.py build --source current --output measurements/current
+
+      - name: Measure baseline using the same harness
+        if: env.BASE_REF != '' && env.BASE_REF != '0000000000000000000000000000000000000000'
+        run: python3 current/tools/size/size_report.py build --source baseline --output measurements/baseline
+
+      - name: Compare sizes (report only)
+        if: env.BASE_REF != '' && env.BASE_REF != '0000000000000000000000000000000000000000'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for profile in plain gc lto-gc; do
+            echo "## $profile" >> "$GITHUB_STEP_SUMMARY"
+            python3 current/tools/size/size_report.py compare \
+              "measurements/baseline/$profile.json" "measurements/current/$profile.json" \
+              >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Preserve measurements and link maps
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: binary-size
+          path: |
+            measurements/**/*.json
+            measurements/**/probe.map
+            measurements/**/v4_size_probe
+          if-no-files-found: error
+          retention-days: 30

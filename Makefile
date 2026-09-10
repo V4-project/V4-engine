@@ -28,20 +28,20 @@ clean:
 # Apply formatting
 format:
 	@echo "✨ Formatting C/C++ code..."
-	@find src include tests -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
+	@find src include tests tools -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
 		-not -path "*/vendor/*" -exec clang-format -i {} \;
 	@echo "✨ Formatting CMake files..."
-	@find . -name 'CMakeLists.txt' -o -name '*.cmake' | xargs cmake-format -i
+	@git ls-files -z --cached --others --exclude-standard -- ':(glob)**/CMakeLists.txt' ':(glob)**/*.cmake' | xargs -0 cmake-format -i
 	@echo "✅ Formatting complete!"
 
 # Format check
 format-check:
 	@echo "🔍 Checking C/C++ formatting..."
-	@find src include tests -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
+	@find src include tests tools -type f \( -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -o -name '*.c' \) \
 		-not -path "*/vendor/*" | xargs clang-format --dry-run --Werror || \
 		(echo "❌ C/C++ formatting check failed." && exit 1)
 	@echo "🔍 Checking CMake formatting..."
-	@find . -name 'CMakeLists.txt' -o -name '*.cmake' | xargs cmake-format --check || \
+	@git ls-files -z --cached --others --exclude-standard -- ':(glob)**/CMakeLists.txt' ':(glob)**/*.cmake' | xargs -0 cmake-format --check || \
 		(echo "❌ CMake formatting check failed." && exit 1)
 	@echo "✅ All formatting checks passed!"
 
@@ -62,28 +62,7 @@ ubsan: clean
 	@echo "🧪 Running tests with UndefinedBehaviorSanitizer..."
 	@cd build-ubsan && ctest --output-on-failure
 
-# Build release and show stripped binary sizes
+# Reference linked executable sizes (choose a fresh output directory for each run).
+SIZE_OUTPUT ?= build-size-reference
 size:
-	@echo "📦 Building release with size optimization..."
-	@cmake -B build-release -DCMAKE_BUILD_TYPE=Release -DV4_BUILD_TESTS=ON -DV4_OPTIMIZE_SIZE=ON
-	@cmake --build build-release -j
-	@echo ""
-	@echo "📊 Stripping and measuring binary sizes..."
-	@echo ""
-	@echo "=== Library ==="
-	@if [ -f build-release/libv4engine.a ]; then \
-		cp build-release/libv4engine.a build-release/libv4engine.stripped.a && \
-		strip --strip-debug build-release/libv4engine.stripped.a && \
-		ls -lh build-release/libv4engine.a build-release/libv4engine.stripped.a | awk '{print $$9 ": " $$5}'; \
-	fi
-	@echo ""
-	@echo "=== Test Executables (stripped) ==="
-	@for binary in build-release/test_*; do \
-		if [ -f "$$binary" ] && [ -x "$$binary" ]; then \
-			cp "$$binary" "$${binary}.stripped" && \
-			strip "$${binary}.stripped" && \
-			echo "$$(basename $$binary): $$(ls -lh $${binary}.stripped | awk '{print $$5}')"; \
-		fi \
-	done
-	@echo ""
-	@echo "✅ Size measurement complete!"
+	@python3 tools/size/size_report.py build --output "$(SIZE_OUTPUT)"
