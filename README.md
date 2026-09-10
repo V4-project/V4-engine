@@ -28,8 +28,8 @@ The ID is a 32-bit stack value. Register one global callback with `v4_register_s
 it receives the VM, ID and three arguments. With no handler, SYS consumes its arguments and pushes -1.
 Linking V4-hal does not automatically dispatch GPIO/UART/timer IDs.
 
-The existing `test_sys` cases still target the older HAL dispatch and stack layouts.
-They need migration; this documentation update does not establish a passing test suite.
+The `test_sys` cases cover callback registration, replacement/removal, full-width IDs,
+argument order, stack underflow and the absence of an immediate operand.
 See [the public API](include/v4/vm_api.h) and [execution code](src/core.cpp).
 
 ### CMake

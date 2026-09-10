@@ -440,8 +440,8 @@ extern "C"
    * @param arg2   Third argument
    * @return Result value to push on stack (typically 0 for success, negative for error)
    */
-  typedef v4_i32 (*v4_sys_handler_fn)(struct Vm *vm, v4_i32 sys_id, v4_i32 arg0, v4_i32 arg1,
-                                      v4_i32 arg2);
+  typedef v4_i32 (*v4_sys_handler_fn)(struct Vm *vm, v4_i32 sys_id, v4_i32 arg0,
+                                      v4_i32 arg1, v4_i32 arg2);
 
   /**
    * @brief Register global SYS handler
