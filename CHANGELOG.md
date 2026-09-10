@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-10
+
+### Fixed
+- Use the portable `PRId32` format for panic snapshot error codes. ESP32-C6 toolchains define `int32_t` as `long`, so the previous `%d` diagnostic failed format checks in both ESP-IDF 5.3 and 5.5 builds.
+
 ## [0.18.0] - 2026-09-10
 
 ### Added

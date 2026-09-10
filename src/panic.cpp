@@ -24,7 +24,7 @@ void print_panic(struct Vm *vm, const V4PanicInfo &info)
 
   // Error information
   Err err = static_cast<Err>(info.error_code);
-  printf("Error: %s (code=%d)\n", err_str(err), info.error_code);
+  printf("Error: %s (code=%" PRId32 ")\n", err_str(err), info.error_code);
 
   // Program Counter
   printf("PC: 0x%08" PRIX32 "\n", info.pc);
