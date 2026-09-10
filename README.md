@@ -21,6 +21,19 @@ A lightweight Forth-compatible bytecode VM written in C++17.
 
 ## Building
 
+### Current SYS contract (local source, 2026-09-10)
+
+`SYS` has no immediate operand and uses `( arg0 arg1 arg2 sys_id -- result )`.
+The ID is a 32-bit stack value. Register one global callback with `v4_register_sys_handler()`;
+it receives the VM, ID and three arguments. With no handler, SYS consumes its arguments and pushes -1.
+Linking V4-hal does not automatically dispatch GPIO/UART/timer IDs.
+
+The existing `test_sys` cases still target the older HAL dispatch and stack layouts.
+They need migration; this documentation update does not establish a passing test suite.
+See [the public API](include/v4/vm_api.h) and [execution code](src/core.cpp).
+
+### CMake
+
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
@@ -39,7 +52,7 @@ This provides:
 - Zero-cost abstraction via compile-time polymorphism
 - Platform support: POSIX, ESP32, CH32V203
 - Minimal runtime footprint (~5.7KB for GPIO+Timer)
-- Backward compatible with existing `v4_hal_*` API
+- HAL API linkage; SYS dispatch still requires the callback described above
 
 ## Task System
 
