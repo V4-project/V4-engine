@@ -38,6 +38,9 @@ jobs:
       - name: Measure current revision
         run: python3 current/tools/size/size_report.py build --source current --output measurements/current
 
+      - name: Measure current revision without tasks (separate configuration)
+        run: python3 current/tools/size/size_report.py build --source current --tasks off --output measurements/current-no-tasks
+
       - name: Measure baseline using the same harness
         if: env.BASE_REF != '' && env.BASE_REF != '0000000000000000000000000000000000000000'
         run: python3 current/tools/size/size_report.py build --source baseline --output measurements/baseline

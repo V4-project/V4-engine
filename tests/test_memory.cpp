@@ -38,6 +38,85 @@ static v4_err d_write32(void *user, v4_u32 addr, v4_u32 val)
 /* Test cases                                                                */
 /* ------------------------------------------------------------------------- */
 
+TEST_CASE("Dictionary lifecycle preserves borrowed storage")
+{
+  uint8_t ram[16] = {0x42};
+  uint8_t code[] = {0x51};  // RET; caller-owned bytecode must not be freed.
+  VmConfig cfg{ram, (v4_u32)sizeof(ram), nullptr, 0};
+  Vm *vm = vm_create(&cfg);
+  REQUIRE(vm);
+
+  CHECK(vm_register_word(vm, "first", code, sizeof(code)) == 0);
+  CHECK(vm_register_word(vm, nullptr, code, sizeof(code)) == 1);
+  CHECK(vm_register_word(vm, "last", code, sizeof(code)) == 2);
+
+  SUBCASE("Destroy populated dictionary") {}
+  SUBCASE("Repeated reset followed by destroy")
+  {
+    vm_reset_dictionary(vm);
+    CHECK(vm->word_count == 0);
+    CHECK(vm->words[0].name == nullptr);
+    CHECK(vm->words[2].name == nullptr);
+    vm_reset_dictionary(vm);
+  }
+  SUBCASE("Reset then reuse dictionary")
+  {
+    vm_reset_dictionary(vm);
+    CHECK(vm_register_word(vm, "replacement", code, sizeof(code)) == 0);
+    CHECK(vm->word_count == 1);
+  }
+
+  vm_destroy(vm);
+  CHECK(ram[0] == 0x42);
+  CHECK(code[0] == 0x51);
+}
+
+TEST_CASE("Dictionary destruction leaves arena storage and allocations intact")
+{
+  uint8_t ram[16] = {0x42};
+  uint8_t code[] = {0x51};
+  uint8_t storage[128] = {};
+  V4Arena arena;
+  v4_arena_init(&arena, storage, sizeof(storage));
+  VmConfig cfg{ram, (v4_u32)sizeof(ram), nullptr, 0, &arena};
+  Vm *vm = vm_create(&cfg);
+  REQUIRE(vm);
+
+  CHECK(vm_register_word(vm, "first", code, sizeof(code)) == 0);
+  CHECK(vm_register_word(vm, nullptr, code, sizeof(code)) == 1);
+  const char *first_name = vm->words[0].name;
+
+  SUBCASE("Destroy populated dictionary") {}
+  SUBCASE("Reset then reuse arena dictionary")
+  {
+    const size_t used = arena.used;
+    vm_reset_dictionary(vm);
+    CHECK(vm->word_count == 0);
+    CHECK(arena.used == used);
+    CHECK(vm_register_word(vm, "replacement", code, sizeof(code)) == 0);
+  }
+
+  const size_t used = arena.used;
+  vm_destroy(vm);
+  CHECK(arena.buffer == storage);
+  CHECK(arena.size == sizeof(storage));
+  CHECK(arena.used == used);
+  CHECK(strcmp(first_name, "first") == 0);
+  CHECK(ram[0] == 0x42);
+  CHECK(code[0] == 0x51);
+  CHECK(v4_arena_alloc(&arena, 1, 1) == storage + used);
+}
+
+TEST_CASE("Dictionary lifecycle accepts null and empty VMs")
+{
+  vm_destroy(nullptr);
+  vm_reset_dictionary(nullptr);
+  VmConfig cfg{};
+  Vm *vm = vm_create(&cfg);
+  REQUIRE(vm);
+  vm_destroy(vm);
+}
+
 /**
  * @test RAM normal path: STORE → LOAD should return the same value.
  */

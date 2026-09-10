@@ -47,6 +47,19 @@ base revision in the Binary Size CI workflow. Existing firmware ELF files can al
 recorded and compared; host measurements are not firmware flash sizes.
 See [measurement commands, constraints and optional budgets](tools/size/README.md).
 
+### Builds without task support
+
+Configure `-DV4_ENABLE_TASKS=OFF` for a single-threaded engine without the task
+backend, scheduler, messaging implementation or task-platform dependencies. Task
+support remains ON by default. Public task/message/scheduling APIs remain linkable:
+with a valid VM they return `UnknownOp` (-99), and with a null VM `InvalidArg` (-16),
+without modifying output parameters. Disabled task opcodes follow the normal
+unknown-opcode panic/error path without consuming stack values. Opcode numbers and
+the VM layout are unchanged; this option targets code size, not the VM allocation size.
+Direct-source integrations remain enabled by default and need a coordinated source
+list/compile-definition change to opt out. No runtime repository configuration is
+changed by this engine option.
+
 ### Building with V4-hal (C++17 CRTP HAL)
 
 V4 can optionally use the [V4-hal](https://github.com/kirisaki/V4-hal) C++17 CRTP implementation for zero-cost hardware abstraction:

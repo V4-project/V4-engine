@@ -62,6 +62,29 @@ class SizeReportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare(before, after)
 
+    def test_task_configuration_mismatch(self):
+        before, after = self.report(), self.report()
+        before["configuration"]["tasks"] = "on"
+        after["configuration"]["tasks"] = "off"
+        with self.assertRaises(ValueError):
+            compare(before, after)
+
+    def test_old_engine_cannot_claim_tasks_disabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "CMakeLists.txt").write_text("# old engine")
+            output = root / "output"
+
+            def configure(*args, **kwargs):
+                flags = output / "plain/engine/CMakeFiles/v4engine.dir/flags.make"
+                flags.parent.mkdir(parents=True)
+                flags.write_text("CXX_DEFINES =\n")
+
+            with patch("size_report.subprocess.run", side_effect=configure) as mocked:
+                self.assertEqual(main(["build", "--source", str(root), "--output", str(output),
+                                       "--tasks", "off"]), 2)
+                self.assertEqual(mocked.call_count, 1)
+
     def test_old_engine_cannot_claim_diagnostics_disabled(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

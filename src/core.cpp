@@ -14,6 +14,11 @@
 #include "v4/task.h"
 #include "v4/vm_api.h"
 
+// Direct-source platform builds keep task support unless explicitly disabled.
+#ifndef V4_ENABLE_TASKS
+#define V4_ENABLE_TASKS 1
+#endif
+
 /* ========================================================================= */
 /* SYS Handler Registration                                                  */
 /* ========================================================================= */
@@ -222,105 +227,94 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
         break;
       }
 
-      /* -------- Arithmetic -------- */
+      /* -------- Binary arithmetic and comparison -------- */
       case v4::Op::ADD:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_push(vm, b + a))
-          return e;
-        break;
-      }
-
       case v4::Op::SUB:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_push(vm, b - a))
-          return e;
-        break;
-      }
-
       case v4::Op::MUL:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a * b))
-          return e;
-        break;
-      }
-
       case v4::Op::DIV:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (b == 0)
-          return vm_panic(vm, V4_ERR(DivByZero));
-        if (v4_err e = ds_push(vm, a / b))
-          return e;
-        break;
-      }
-
       case v4::Op::MOD:
+      case v4::Op::DIVU:
+      case v4::Op::MODU:
+      case v4::Op::EQ:
+      case v4::Op::NE:
+      case v4::Op::LT:
+      case v4::Op::LE:
+      case v4::Op::GT:
+      case v4::Op::GE:
+      case v4::Op::LTU:
+      case v4::Op::LEU:
       {
+        // Keep sequential pops: a one-item underflow consumes that item before panic.
         v4_i32 a, b;
         if (v4_err e = ds_pop(vm, &b))
           return e;
         if (v4_err e = ds_pop(vm, &a))
           return e;
-        if (b == 0)
-          return vm_panic(vm, V4_ERR(DivByZero));
-        if (v4_err e = ds_push(vm, a % b))
+        v4_i32 result = 0;
+        switch (op)
+        {
+          case v4::Op::ADD:
+            result = a + b;
+            break;
+          case v4::Op::SUB:
+            result = a - b;
+            break;
+          case v4::Op::MUL:
+            result = a * b;
+            break;
+          case v4::Op::DIV:
+            if (b == 0)
+              return vm_panic(vm, V4_ERR(DivByZero));
+            result = a / b;
+            break;
+          case v4::Op::MOD:
+            if (b == 0)
+              return vm_panic(vm, V4_ERR(DivByZero));
+            result = a % b;
+            break;
+          case v4::Op::DIVU:
+            if (b == 0)
+              return vm_panic(vm, V4_ERR(DivByZero));
+            result = (v4_i32)((v4_u32)a / (v4_u32)b);
+            break;
+          case v4::Op::MODU:
+            if (b == 0)
+              return vm_panic(vm, V4_ERR(DivByZero));
+            result = (v4_i32)((v4_u32)a % (v4_u32)b);
+            break;
+          case v4::Op::EQ:
+            result = a == b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::NE:
+            result = a != b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::LT:
+            result = a < b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::LE:
+            result = a <= b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::GT:
+            result = a > b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::GE:
+            result = a >= b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::LTU:
+            result = (v4_u32)a < (v4_u32)b ? V4_TRUE : V4_FALSE;
+            break;
+          case v4::Op::LEU:
+            result = (v4_u32)a <= (v4_u32)b ? V4_TRUE : V4_FALSE;
+            break;
+          default:
+            break;  // Only the binary opcodes above enter this block.
+        }
+        if (v4_err e = ds_push(vm, result))
           return e;
         break;
       }
 
-      case v4::Op::DIVU:
-      {
-        v4_u32 a, b;
-        v4_i32 a_i32, b_i32;
-        if (v4_err e = ds_pop(vm, &b_i32))
-          return e;
-        if (v4_err e = ds_pop(vm, &a_i32))
-          return e;
-        b = (v4_u32)b_i32;
-        a = (v4_u32)a_i32;
-        if (b == 0)
-          return vm_panic(vm, V4_ERR(DivByZero));
-        if (v4_err e = ds_push(vm, (v4_i32)(a / b)))
-          return e;
-        break;
-      }
-
-      case v4::Op::MODU:
-      {
-        v4_u32 a, b;
-        v4_i32 a_i32, b_i32;
-        if (v4_err e = ds_pop(vm, &b_i32))
-          return e;
-        if (v4_err e = ds_pop(vm, &a_i32))
-          return e;
-        b = (v4_u32)b_i32;
-        a = (v4_u32)a_i32;
-        if (b == 0)
-          return vm_panic(vm, V4_ERR(DivByZero));
-        if (v4_err e = ds_push(vm, (v4_i32)(a % b)))
-          return e;
-        break;
-      }
-
+      /* -------- Unary arithmetic -------- */
       case v4::Op::INC:
       {
         v4_i32 a;
@@ -337,109 +331,6 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
         if (v4_err e = ds_pop(vm, &a))
           return e;
         if (v4_err e = ds_push(vm, a - 1))
-          return e;
-        break;
-      }
-
-      /* -------- Comparison -------- */
-      case v4::Op::EQ:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a == b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::NE:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a != b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::LT:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a < b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::LE:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a <= b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::GT:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a > b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::GE:
-      {
-        v4_i32 a, b;
-        if (v4_err e = ds_pop(vm, &b))
-          return e;
-        if (v4_err e = ds_pop(vm, &a))
-          return e;
-        if (v4_err e = ds_push(vm, a >= b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::LTU:
-      {
-        v4_u32 a, b;
-        v4_i32 a_i32, b_i32;
-        if (v4_err e = ds_pop(vm, &b_i32))
-          return e;
-        if (v4_err e = ds_pop(vm, &a_i32))
-          return e;
-        b = (v4_u32)b_i32;
-        a = (v4_u32)a_i32;
-        if (v4_err e = ds_push(vm, a < b ? V4_TRUE : V4_FALSE))
-          return e;
-        break;
-      }
-
-      case v4::Op::LEU:
-      {
-        v4_u32 a, b;
-        v4_i32 a_i32, b_i32;
-        if (v4_err e = ds_pop(vm, &b_i32))
-          return e;
-        if (v4_err e = ds_pop(vm, &a_i32))
-          return e;
-        b = (v4_u32)b_i32;
-        a = (v4_u32)a_i32;
-        if (v4_err e = ds_push(vm, a <= b ? V4_TRUE : V4_FALSE))
           return e;
         break;
       }
@@ -976,7 +867,8 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
       case v4::Op::RET:
         return V4_ERR(OK);
 
-      /* === Task Management (0x90-0x9A) === */
+        /* === Task Management (0x90-0x9A) === */
+#if V4_ENABLE_TASKS
       case v4::Op::TASK_SPAWN:
       {
         v4_i32 rs_size, ds_size, priority, word_idx;
@@ -1122,6 +1014,7 @@ extern "C" v4_err vm_exec_raw(Vm* vm, const v4_u8* bc, int len)
         break;
       }
 
+#endif  // V4_ENABLE_TASKS: disabled task opcodes use the UnknownOp panic below.
       default:
         return vm_panic(vm, V4_ERR(UnknownOp));
     }

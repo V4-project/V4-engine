@@ -170,6 +170,17 @@ jobs:
             tools: "OFF"
             mock_hal: "ON"
             panic_diagnostics: "OFF"
+          - name: "No tasks"
+            tests: "ON"
+            tools: "OFF"
+            mock_hal: "ON"
+            tasks_enabled: "OFF"
+          - name: "No tasks or panic diagnostics"
+            tests: "ON"
+            tools: "OFF"
+            mock_hal: "ON"
+            tasks_enabled: "OFF"
+            panic_diagnostics: "OFF"
 
     steps:
     - name: Checkout code
@@ -185,6 +196,7 @@ jobs:
           -DV4_BUILD_TESTS=${{ matrix.config.tests }} \
           -DV4_BUILD_TOOLS=${{ matrix.config.tools }} \
           -DV4_ENABLE_MOCK_HAL=${{ matrix.config.mock_hal }} \
+          -DV4_ENABLE_TASKS=${{ matrix.config.tasks_enabled || 'ON' }} \
           -DV4_PANIC_DIAGNOSTICS=${{ matrix.config.panic_diagnostics || 'ON' }} \
           ${{ matrix.config.optimize_size && format('-DV4_OPTIMIZE_SIZE={0}', matrix.config.optimize_size) || '' }}
 

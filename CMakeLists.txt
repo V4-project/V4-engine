@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(
   V4Engine
-  VERSION 0.17.0
+  VERSION 0.18.0
   LANGUAGES C CXX)
 
 # ============================================================================
@@ -20,6 +20,7 @@ option(V4_USE_V4HAL "Use V4-hal C++17 CRTP implementation" OFF)
 option(V4_USE_V4STD "Use V4-std device-independent standard library" OFF)
 option(V4_OPTIMIZE_SIZE "Optimize for size (-Os)" ON)
 option(V4_PANIC_DIAGNOSTICS "Include standard panic diagnostic output" ON)
+option(V4_ENABLE_TASKS "Include task execution, scheduling and messaging" ON)
 option(
   V4_ENABLE_LTO
   "Enable Link Time Optimization (incompatible with sanitizers - disable for ASan/TSan)"
@@ -50,17 +51,17 @@ set(FREERTOS_PATH
 # Core VM Library
 # ============================================================================
 
-set(V4ENGINE_SOURCES
-    src/core.cpp
-    src/memory.cpp
-    src/arena.cpp
-    src/task.cpp
-    src/scheduler.cpp
-    src/message.cpp
-    src/panic.cpp)
+set(V4ENGINE_SOURCES src/core.cpp src/memory.cpp src/arena.cpp)
+if(V4_ENABLE_TASKS)
+  list(APPEND V4ENGINE_SOURCES src/task.cpp src/scheduler.cpp src/message.cpp)
+endif()
+list(APPEND V4ENGINE_SOURCES src/panic.cpp)
 
 # Add task backend implementation based on selection
-if(V4_TASK_BACKEND STREQUAL "CUSTOM")
+if(NOT V4_ENABLE_TASKS)
+  list(APPEND V4ENGINE_SOURCES src/task_disabled.cpp)
+  message(STATUS "Task support disabled (public API stubs only)")
+elseif(V4_TASK_BACKEND STREQUAL "CUSTOM")
   list(APPEND V4ENGINE_SOURCES src/task_backend_custom.cpp)
   message(STATUS "Using CUSTOM task backend")
 elseif(V4_TASK_BACKEND STREQUAL "FREERTOS")
@@ -70,10 +71,6 @@ elseif(V4_TASK_BACKEND STREQUAL "FREERTOS")
   # FreeRTOS integration (only needed for standalone FreeRTOS, not ESP-IDF)
   if(FREERTOS_PATH AND EXISTS "${FREERTOS_PATH}")
     message(STATUS "Using FreeRTOS from: ${FREERTOS_PATH}")
-    # Add FreeRTOS include paths if building outside ESP-IDF
-    target_include_directories(
-      v4engine PRIVATE "${FREERTOS_PATH}/include"
-                       "${FREERTOS_PATH}/portable/${FREERTOS_PORT}")
   else()
     message(STATUS "FreeRTOS provided by platform (e.g., ESP-IDF)")
   endif()
@@ -83,6 +80,15 @@ else()
 endif()
 
 add_library(v4engine STATIC ${V4ENGINE_SOURCES})
+target_compile_definitions(v4engine PUBLIC V4_ENABLE_TASKS=$<BOOL:${V4_ENABLE_TASKS}>)
+if(V4_ENABLE_TASKS
+   AND V4_TASK_BACKEND STREQUAL "FREERTOS"
+   AND FREERTOS_PATH
+   AND EXISTS "${FREERTOS_PATH}")
+  target_include_directories(
+    v4engine PRIVATE "${FREERTOS_PATH}/include"
+                     "${FREERTOS_PATH}/portable/${FREERTOS_PORT}")
+endif()
 target_compile_definitions(v4engine
                            PRIVATE V4_PANIC_DIAGNOSTICS=$<BOOL:${V4_PANIC_DIAGNOSTICS}>)
 
@@ -139,7 +145,10 @@ endif()
 # ============================================================================
 
 if(V4_ENABLE_MOCK_HAL)
-  add_library(mock_hal STATIC tests/mock_hal.cpp tests/mock_task_platform.cpp)
+  add_library(mock_hal STATIC tests/mock_hal.cpp)
+  if(V4_ENABLE_TASKS)
+    target_sources(mock_hal PRIVATE tests/mock_task_platform.cpp)
+  endif()
 
   target_include_directories(mock_hal PUBLIC ${PROJECT_SOURCE_DIR}/include
                                              ${PROJECT_SOURCE_DIR}/tests)
@@ -243,6 +252,7 @@ if(V4_BUILD_TESTS)
 
     # VM Core Tests
     add_v4_test(test_vm tests/test_vm.cpp)
+    add_v4_test(test_binary_ops tests/test_binary_ops.cpp)
     add_v4_test(test_return_stack tests/test_return_stack.cpp)
     add_v4_test(test_call tests/test_call.cpp)
     add_v4_test(test_word_shadowing tests/test_word_shadowing.cpp)
@@ -259,7 +269,11 @@ if(V4_BUILD_TESTS)
     add_v4_test(test_api_extensions tests/test_api_extensions.cpp)
 
     # Task System Tests
-    add_v4_test(test_task tests/test_task.cpp)
+    if(V4_ENABLE_TASKS)
+      add_v4_test(test_task tests/test_task.cpp)
+    else()
+      add_v4_test(test_task_disabled tests/test_task_disabled.cpp)
+    endif()
 
     # Panic Handler Tests
     add_v4_test(test_panic tests/test_panic.cpp)
@@ -311,6 +325,7 @@ message(STATUS "  Version:              ${PROJECT_VERSION}")
 message(STATUS "  Build type:           ${CMAKE_BUILD_TYPE}")
 message(STATUS "  C++ standard:         ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Task backend:         ${V4_TASK_BACKEND}")
+message(STATUS "  Enable tasks:         ${V4_ENABLE_TASKS}")
 message(STATUS "  Build tests:          ${V4_BUILD_TESTS}")
 message(STATUS "  Build tools:          ${V4_BUILD_TOOLS}")
 message(STATUS "  Enable mock HAL:      ${V4_ENABLE_MOCK_HAL}")

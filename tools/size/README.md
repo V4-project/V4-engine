@@ -43,6 +43,14 @@ an opt-in build without the standard panic formatter. Reports record this settin
 and reject comparisons between on/off configurations. Compare matching settings
 for refactoring deltas; an on/off comparison represents a feature tradeoff instead.
 
+Engine 0.18.0+ also supports `build --tasks off --output build-size-no-tasks`.
+This retains the VM layout but removes task instruction implementations and scheduler/
+platform code. Task and message APIs remain linkable and report unsupported operations.
+The recorder verifies that the requested OFF setting reached the compiler, records
+`tasks` and the effective backend, and rejects on/off comparisons. Older engine
+revisions cannot be measured with tasks disabled. CI additionally retains the current
+no-task measurements as a separate configuration, not as a compatible base/current delta.
+
 Each profile retains `v4_size_probe`, `probe.map`, and a JSON report with source revision,
 dirty status, ELF architecture, compiler/linker/size/CMake versions, CMake flags and a
 harness hash. Comparisons reject differing configurations. Rebuild both revisions when

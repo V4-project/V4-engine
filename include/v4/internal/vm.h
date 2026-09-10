@@ -60,7 +60,7 @@ extern "C"
     /* Reserved for future JIT / IC linkage */
     const VmConfig *boot_cfg_snapshot;
 
-    /* Task system (always enabled) */
+    /* Task storage retained even when disabled, preserving the VM layout. */
     v4_scheduler_t scheduler; /**< Task scheduler */
     v4_msg_queue_t msg_queue; /**< Message queue */
 

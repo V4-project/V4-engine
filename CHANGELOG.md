@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-10
+
+### Added
+- Opt-in `V4_ENABLE_TASKS=OFF` builds omit task execution, scheduler, messaging and task-platform code while preserving VM layout and public task API symbols. APIs return `UnknownOp` (`InvalidArg` for a null VM); disabled opcodes use the existing unknown-opcode panic path without consuming arguments. Default task-enabled and runtime configurations are unchanged.
+- Regression coverage for arithmetic operand order and failure snapshots, dictionary ownership/lifecycle, and every disabled task opcode and public task API.
+- Size recorder `--tasks on|off` with configuration validation, CI measurements for the task-disabled build, and CI tests with tasks and/or panic diagnostics disabled.
+
+### Changed
+- Share sequential operand pops and the result push across 15 arithmetic/comparison instructions, preserving existing partial-stack effects and panic timing.
+- Apply standalone FreeRTOS include paths after creating the engine target and only when tasks are enabled.
+
 ## [0.17.0] - 2026-09-10
 
 ### Added

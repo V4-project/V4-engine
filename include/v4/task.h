@@ -13,6 +13,14 @@ extern "C"
   /* ========================================================================= */
 
   /**
+   * Builds with V4_ENABLE_TASKS=OFF retain all public task/message API symbols.
+   * Calls return V4_ERR_UnknownOp (-99), or V4_ERR_InvalidArg (-16) for a NULL VM,
+   * without modifying state or output arguments. No task IDs or messages are
+   * produced. Task opcodes retain their values but panic with UnknownOp before
+   * consuming stack arguments. The default build enables task support.
+   */
+
+  /**
    * @brief Task state enumeration (public view)
    */
   typedef enum
